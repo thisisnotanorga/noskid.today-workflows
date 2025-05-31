@@ -177,41 +177,38 @@ runs:
         echo "📝 Generating release notes..."
         
         VERSION="${{ steps.version.outputs.version }}"
-        CHANGELOG="${{ steps.changelog.outputs.changelog }}"
-        COMMITS="${{ steps.commits.outputs.commits }}"
-        STATS="${{ steps.stats.outputs.stats }}"
         
-        # Create release notes with proper formatting
-        cat << 'EOF' > release_notes.md
-# 🚀 NoSkid Release ${{ steps.version.outputs.version }}
-
-## 📋 Changelog
-
-```
-${{ steps.changelog.outputs.changelog }}
-```
-
-## 🔄 Recent Changes
-
-${{ steps.commits.outputs.commits }}
-
-${{ steps.stats.outputs.stats }}
-
-## 📦 Assets
-
-- **noskid-prod-${{ steps.version.outputs.version }}.zip**: Production build ready for deployment
-- **noskid-source-${{ steps.version.outputs.version }}.zip**: Complete source code (excluding build artifacts)
-
----
-*This release was automatically created on $(date -u '+%Y-%m-%d at %H:%M:%S UTC')*
-EOF
+        # Create release notes file
+        cat > release_notes.md << 'RELEASE_EOF'
+        # 🚀 NoSkid Release VERSION_PLACEHOLDER
         
-        # Read the generated file and store in output
-        RELEASE_NOTES_CONTENT=$(cat release_notes.md)
+        ## 📋 Changelog
         
-        echo "release-notes<<EOF" >> $GITHUB_OUTPUT
-        echo "$RELEASE_NOTES_CONTENT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        ```
+        CHANGELOG_PLACEHOLDER
+        ```
+        
+        ## 🔄 Recent Changes
+        
+        COMMITS_PLACEHOLDER
+        
+        STATS_PLACEHOLDER
+        
+        ## 📦 Assets
+        
+        - **noskid-prod-VERSION_PLACEHOLDER.zip**: Production build ready for deployment
+        - **noskid-source-VERSION_PLACEHOLDER.zip**: Complete source code (excluding build artifacts)
+        
+        ---
+        *This release was automatically created on BUILD_DATE_PLACEHOLDER*
+        RELEASE_EOF
+        
+        # Replace placeholders with actual values
+        sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" release_notes.md
+        sed -i "s/CHANGELOG_PLACEHOLDER/${{ steps.changelog.outputs.changelog }}/g" release_notes.md
+        sed -i "s/COMMITS_PLACEHOLDER/${{ steps.commits.outputs.commits }}/g" release_notes.md
+        sed -i "s/STATS_PLACEHOLDER/${{ steps.stats.outputs.stats }}/g" release_notes.md
+        sed -i "s/BUILD_DATE_PLACEHOLDER/$(date -u '+%Y-%m-%d at %H:%M:%S UTC')/g" release_notes.md
         
         echo "✅ Release notes generated"
     
