@@ -103,17 +103,17 @@ runs:
         </html>
         EOF
         
-        # Replace placeholders
-        sed -i "s/COMMIT_HASH_PLACEHOLDER/$COMMIT_HASH/g" email_content.html
-        sed -i "s/DEPLOY_TIME_PLACEHOLDER/$DEPLOY_TIME/g" email_content.html
-        sed -i "s/GITHUB_REPOSITORY_PLACEHOLDER/$GITHUB_REPOSITORY/g" email_content.html
-        sed -i "s/GITHUB_WORKFLOW_PLACEHOLDER/$GITHUB_WORKFLOW/g" email_content.html
+        # Replace placeholders (using | as delimiter to avoid issues with /)
+        sed -i "s|COMMIT_HASH_PLACEHOLDER|$COMMIT_HASH|g" email_content.html
+        sed -i "s|DEPLOY_TIME_PLACEHOLDER|$DEPLOY_TIME|g" email_content.html
+        sed -i "s|GITHUB_REPOSITORY_PLACEHOLDER|$GITHUB_REPOSITORY|g" email_content.html
+        sed -i "s|GITHUB_WORKFLOW_PLACEHOLDER|$GITHUB_WORKFLOW|g" email_content.html
         
-        # Set deployment type
+        # Set deployment type (using | as delimiter)
         if [ "$API_ONLY" = "true" ]; then
-            sed -i "s/DEPLOY_TYPE_PLACEHOLDER/API Only Deployment/g" email_content.html
+            sed -i "s|DEPLOY_TYPE_PLACEHOLDER|API Only Deployment|g" email_content.html
         else
-            sed -i "s/DEPLOY_TYPE_PLACEHOLDER/Full Website Deployment/g" email_content.html
+            sed -i "s|DEPLOY_TYPE_PLACEHOLDER|Full Website Deployment|g" email_content.html
         fi
         
         # Add build statistics if build directory is provided
@@ -121,9 +121,9 @@ runs:
             TOTAL_FILES=$(find "$BUILD_DIR" -type f | wc -l)
             TOTAL_SIZE=$(du -sh "$BUILD_DIR" 2>/dev/null | cut -f1 || echo "N/A")
             BUILD_STATS="<li><strong>Files Deployed:</strong> $TOTAL_FILES</li><li><strong>Total Size:</strong> $TOTAL_SIZE</li>"
-            sed -i "s/BUILD_STATS_PLACEHOLDER/$BUILD_STATS/g" email_content.html
+            sed -i "s|BUILD_STATS_PLACEHOLDER|$BUILD_STATS|g" email_content.html
         else
-            sed -i "s/BUILD_STATS_PLACEHOLDER//g" email_content.html
+            sed -i "s|BUILD_STATS_PLACEHOLDER||g" email_content.html
         fi
         
         echo "✅ Email content prepared"
