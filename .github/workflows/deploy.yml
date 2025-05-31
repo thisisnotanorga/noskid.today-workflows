@@ -1,5 +1,4 @@
-# .github/workflows/deploy.yml
-name: 🚀 Deploy NoSkid Website
+name: Deploy NoSkid Production build
 
 on:
   push:
@@ -14,21 +13,20 @@ env:
 
 jobs:
   analyze-changes:
-    name: 📋 Analyze Changes
+    name: Analyze Changes
     runs-on: ubuntu-latest
     outputs:
       api-only: ${{ steps.check.outputs.api-only }}
       has-frontend: ${{ steps.check.outputs.has-frontend }}
       changed-files: ${{ steps.check.outputs.changed-files }}
-      is-release: ${{ steps.check.outputs.is-release }}
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Full history for release notes
+        fetch-depth: 2
     
-    - name: Analyze changed files and commit
+    - name: Analyze changed files
       id: check
       run: |
         # Get list of changed files
@@ -39,16 +37,6 @@ jobs:
         
         echo "📋 Changed files:"
         echo "$CHANGED_FILES"
-        
-        # Check if commit message contains "release"
-        COMMIT_MSG=$(git log -1 --pretty=%B)
-        if echo "$COMMIT_MSG" | grep -qi "release"; then
-          IS_RELEASE=true
-          echo "🎯 Release detected in commit message!"
-        else
-          IS_RELEASE=false
-        fi
-        echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
         
         # Check if only API files were changed
         API_ONLY=true
@@ -66,10 +54,9 @@ jobs:
         echo "api-only=$API_ONLY" >> $GITHUB_OUTPUT
         echo "has-frontend=$HAS_FRONTEND" >> $GITHUB_OUTPUT
         
-        echo "🔍 Analysis results:"
+        echo "[i] Analysis results:"
         echo "   - API only: $API_ONLY"
         echo "   - Has frontend changes: $HAS_FRONTEND"
-        echo "   - Is release: $IS_RELEASE"
 
   build-and-deploy:
     name: 🔨 Build & Deploy
@@ -80,8 +67,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Full history for release
     
     - name: Build NoSkid project
       id: build
@@ -111,50 +96,33 @@ jobs:
         api-password: ${{ secrets.API_PASSWORD }}
         retry-count: '3'
     
-    - name: Create GitHub Release
-      id: create-release
-      if: |
-        needs.analyze-changes.outputs.is-release == 'true' &&
-        steps.build.outputs.build-success == 'true' && 
-        steps.deploy.outputs.deploy-success == 'true' &&
-        steps.api-update.outputs.update-success == 'true'
-      uses: ./.github/actions/create-release
-      with:
-        build-dir: ${{ steps.build.outputs.build-dir }}
-        commit-hash: ${{ steps.build.outputs.commit-hash }}
-        api-only: ${{ needs.analyze-changes.outputs.api-only }}
-        github-token: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: 🎉 Success notification
+    - name: Success
       if: |
         steps.build.outputs.build-success == 'true' && 
         steps.deploy.outputs.deploy-success == 'true' &&
         steps.api-update.outputs.update-success == 'true'
       run: |
-        echo "::notice title=Deployment Success::🎉 Deployment completed successfully!"
+        echo "::notice title=Deployment Success::[OK] Deployment completed successfully!"
         
         if [ "${{ needs.analyze-changes.outputs.api-only }}" = "true" ]; then
-          echo "::notice title=API Only::📡 API-only changes deployed successfully!"
+          echo "::notice title=API Only::[OK] API-only changes deployed successfully!"
         else
-          echo "::notice title=Full Deploy::🚀 Version ${{ steps.build.outputs.commit-hash }} deployed successfully!"
-        fi
-        
-        if [ "${{ needs.analyze-changes.outputs.is-release }}" = "true" ]; then
-          echo "::notice title=Release Created::🎊 GitHub release created successfully!"
+          echo "::notice title=Full Deploy::[OK] Version ${{ steps.build.outputs.commit-hash }} deployed successfully!"
         fi
       
-        echo "📊 Deployment Summary:"
+        
+        echo "[i] Deployment Summary:"
         echo "   - Commit: ${{ steps.build.outputs.commit-hash }}"
         echo "   - API Only: ${{ needs.analyze-changes.outputs.api-only }}"
         echo "   - Build Success: ${{ steps.build.outputs.build-success }}"
         echo "   - Deploy Success: ${{ steps.deploy.outputs.deploy-success }}"
         echo "   - API Update: ${{ steps.api-update.outputs.update-success }}"
-        echo "   - Release Created: ${{ needs.analyze-changes.outputs.is-release }}"
     
-    - name: 💥 Failure notification
+    - name: Failure
       if: failure()
       run: |
-        echo "::error title=Deployment Failed::💥 Deployment failed!"
+        echo "::error title=Deployment Failed::Deployment failed!"
         
         if [ "${{ steps.build.outputs.build-success }}" != "true" ]; then
           echo "::error title=Build Failed::❌ Build process failed"
@@ -164,10 +132,8 @@ jobs:
           echo "::error title=API Update Failed::❌ Failed to update API version"
           echo "API Response: ${{ steps.api-update.outputs.response-body }}"
           echo "HTTP Status: ${{ steps.api-update.outputs.http-status }}"
-        elif [ "${{ steps.create-release.outputs.release-success }}" = "false" ]; then
-          echo "::error title=Release Failed::❌ Failed to create GitHub release"
         else
           echo "::error title=Unknown Error::❌ Unknown deployment error"
         fi
         
-        echo "📋 Check the workflow logs above for detailed error information"
+        echo "[i] Check the workflow logs above for detailed error information"

@@ -60,4 +60,4 @@ runs:
           exit 1
         fi
         echo "build-dir=$BUILD_DIR" >> $GITHUB_OUTPUT
-        echo "📁 Build directory: $BUILD_DIR"
+        echo "[i] Build directory: $BUILD_DIR"
