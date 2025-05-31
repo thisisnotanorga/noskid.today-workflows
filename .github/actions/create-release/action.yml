@@ -1,0 +1,233 @@
+# .github/actions/create-release/action.yml
+name: 'Create GitHub Release'
+description: 'Create a GitHub release with build artifacts and changelog'
+
+inputs:
+  build-dir:
+    description: 'Path to the build directory'
+    required: true
+  commit-hash:
+    description: 'Short commit hash'
+    required: true
+  api-only:
+    description: 'Whether this was an API-only deployment'
+    required: true
+  github-token:
+    description: 'GitHub token for creating releases'
+    required: true
+
+outputs:
+  release-success:
+    description: 'Whether the release was created successfully'
+    value: ${{ steps.create-release.outputs.success }}
+  release-url:
+    description: 'URL of the created release'
+    value: ${{ steps.create-release.outputs.release-url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate release version
+      id: version
+      shell: bash
+      run: |
+        VERSION=$(date +'%Y.%m.%d-%H%M')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "🏷️ Release version: $VERSION"
+    
+    - name: Collect commit messages
+      id: commits
+      shell: bash
+      run: |
+        echo "📝 Collecting commit messages since last release..."
+        
+        # Get last release tag, or fallback to first commit if no releases
+        LAST_RELEASE=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+        
+        echo "📍 Last release/start: $LAST_RELEASE"
+        
+        # Get commit messages since last release
+        COMMITS=$(git log ${LAST_RELEASE}..HEAD --pretty=format:"- %s (%h)" --reverse)
+        
+        if [ -z "$COMMITS" ]; then
+          COMMITS="- Initial release"
+        fi
+        
+        echo "commits<<EOF" >> $GITHUB_OUTPUT
+        echo "$COMMITS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "📋 Commit messages:"
+        echo "$COMMITS"
+    
+    - name: Read changelog
+      id: changelog
+      shell: bash
+      run: |
+        echo "📖 Reading changelog.txt..."
+        
+        if [ -f "changelog.txt" ]; then
+          CHANGELOG_CONTENT=$(cat changelog.txt)
+          echo "✅ Changelog found"
+        else
+          CHANGELOG_CONTENT="No changelog available"
+          echo "⚠️ No changelog.txt found"
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Collect deployment stats
+      id: stats
+      shell: bash
+      run: |
+        echo "📊 Collecting deployment statistics..."
+        
+        BUILD_DIR="${{ inputs.build-dir }}"
+        
+        # Build statistics
+        if [ -d "$BUILD_DIR" ]; then
+          BUILD_SIZE=$(du -sh "$BUILD_DIR" | cut -f1)
+          BUILD_FILES=$(find "$BUILD_DIR" -type f | wc -l)
+        else
+          BUILD_SIZE="Unknown"
+          BUILD_FILES="Unknown"
+        fi
+        
+        # Git statistics
+        TOTAL_COMMITS=$(git rev-list --count HEAD)
+        CONTRIBUTORS=$(git shortlog -sn --all | wc -l)
+        
+        # Repository size
+        REPO_SIZE=$(du -sh .git | cut -f1)
+        
+        STATS="## 📊 Deployment Statistics
+
+- **Build Size**: $BUILD_SIZE
+- **Build Files**: $BUILD_FILES files
+- **Total Commits**: $TOTAL_COMMITS
+- **Contributors**: $CONTRIBUTORS
+- **Repository Size**: $REPO_SIZE
+- **Deployment Type**: ${{ inputs.api-only == 'true' && 'API Only' || 'Full Deployment' }}
+- **Commit Hash**: ${{ inputs.commit-hash }}
+- **Build Date**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        
+        echo "stats<<EOF" >> $GITHUB_OUTPUT
+        echo "$STATS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "📈 Stats collected:"
+        echo "$STATS"
+    
+    - name: Create production build archive
+      id: prod-archive
+      shell: bash
+      run: |
+        echo "📦 Creating production build archive..."
+        
+        BUILD_DIR="${{ inputs.build-dir }}"
+        VERSION="${{ steps.version.outputs.version }}"
+        
+        if [ -d "$BUILD_DIR" ]; then
+          cd "$BUILD_DIR"
+          zip -r "../noskid-prod-${VERSION}.zip" . -x "*.txt" "*.md" "*.log"
+          cd ..
+          
+          PROD_ARCHIVE="noskid-prod-${VERSION}.zip"
+          PROD_SIZE=$(du -sh "$PROD_ARCHIVE" | cut -f1)
+          
+          echo "✅ Production archive created: $PROD_ARCHIVE ($PROD_SIZE)"
+        else
+          echo "❌ Build directory not found: $BUILD_DIR"
+          exit 1
+        fi
+        
+        echo "prod-archive=$PROD_ARCHIVE" >> $GITHUB_OUTPUT
+    
+    - name: Create source code archive
+      id: source-archive
+      shell: bash
+      run: |
+        echo "📦 Creating source code archive..."
+        
+        VERSION="${{ steps.version.outputs.version }}"
+        SOURCE_ARCHIVE="noskid-source-${VERSION}.zip"
+        
+        # Create source archive excluding build directories, node_modules, and git
+        zip -r "$SOURCE_ARCHIVE" . \
+          -x "build/*" \
+          -x "node_modules/*" \
+          -x ".git/*" \
+          -x "*.zip" \
+          -x "*.log" \
+          -x ".github/workflows/*" \
+          -x ".vscode/*" \
+          -x "*.tmp"
+        
+        SOURCE_SIZE=$(du -sh "$SOURCE_ARCHIVE" | cut -f1)
+        echo "✅ Source archive created: $SOURCE_ARCHIVE ($SOURCE_SIZE)"
+        
+        echo "source-archive=$SOURCE_ARCHIVE" >> $GITHUB_OUTPUT
+    
+    - name: Generate release notes
+      id: release-notes
+      shell: bash
+      run: |
+        echo "📝 Generating release notes..."
+        
+        VERSION="${{ steps.version.outputs.version }}"
+        CHANGELOG="${{ steps.changelog.outputs.changelog }}"
+        COMMITS="${{ steps.commits.outputs.commits }}"
+        STATS="${{ steps.stats.outputs.stats }}"
+        
+        RELEASE_NOTES="# 🚀 NoSkid Release $VERSION\n\n## 📋 Changelog\n\n\`\`\`\n$CHANGELOG\n\`\`\`\n\n## 🔄 Recent Changes\n\n$COMMITS\n\n$STATS\n\n## 📦 Assets\n\n- **noskid-prod-${VERSION}.zip**: Production build ready for deployment\n- **noskid-source-${VERSION}.zip**: Complete source code (excluding build artifacts)\n\n---\n*This release was automatically created on $(date -u '+%Y-%m-%d at %H:%M:%S UTC')*"
+
+
+        
+        echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+        echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "✅ Release notes generated"
+    
+    - name: Create GitHub Release
+      id: create-release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        echo "🎊 Creating GitHub release..."
+        
+        VERSION="${{ steps.version.outputs.version }}"
+        RELEASE_NOTES="${{ steps.release-notes.outputs.release-notes }}"
+        PROD_ARCHIVE="${{ steps.prod-archive.outputs.prod-archive }}"
+        SOURCE_ARCHIVE="${{ steps.source-archive.outputs.source-archive }}"
+        
+        # Create release
+        RELEASE_RESPONSE=$(gh release create "v$VERSION" \
+          --title "🚀 NoSkid $VERSION" \
+          --notes "$RELEASE_NOTES" \
+          --draft=false \
+          --prerelease=false \
+          "$PROD_ARCHIVE" \
+          "$SOURCE_ARCHIVE" 2>&1)
+        
+        if [ $? -eq 0 ]; then
+          echo "✅ Release created successfully!"
+          echo "success=true" >> $GITHUB_OUTPUT
+          
+          # Get release URL
+          RELEASE_URL=$(gh release view "v$VERSION" --json url --jq '.url')
+          echo "release-url=$RELEASE_URL" >> $GITHUB_OUTPUT
+          
+          echo "🔗 Release URL: $RELEASE_URL"
+          echo "📦 Assets uploaded:"
+          echo "   - $PROD_ARCHIVE"
+          echo "   - $SOURCE_ARCHIVE"
+        else
+          echo "❌ Failed to create release!"
+          echo "Error: $RELEASE_RESPONSE"
+          echo "success=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi

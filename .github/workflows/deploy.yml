@@ -20,14 +20,15 @@ jobs:
       api-only: ${{ steps.check.outputs.api-only }}
       has-frontend: ${{ steps.check.outputs.has-frontend }}
       changed-files: ${{ steps.check.outputs.changed-files }}
+      is-release: ${{ steps.check.outputs.is-release }}
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 2
+        fetch-depth: 0  # Full history for release notes
     
-    - name: Analyze changed files
+    - name: Analyze changed files and commit
       id: check
       run: |
         # Get list of changed files
@@ -38,6 +39,16 @@ jobs:
         
         echo "📋 Changed files:"
         echo "$CHANGED_FILES"
+        
+        # Check if commit message contains "release"
+        COMMIT_MSG=$(git log -1 --pretty=%B)
+        if echo "$COMMIT_MSG" | grep -qi "release"; then
+          IS_RELEASE=true
+          echo "🎯 Release detected in commit message!"
+        else
+          IS_RELEASE=false
+        fi
+        echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
         
         # Check if only API files were changed
         API_ONLY=true
@@ -58,6 +69,7 @@ jobs:
         echo "🔍 Analysis results:"
         echo "   - API only: $API_ONLY"
         echo "   - Has frontend changes: $HAS_FRONTEND"
+        echo "   - Is release: $IS_RELEASE"
 
   build-and-deploy:
     name: 🔨 Build & Deploy
@@ -68,6 +80,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for release
     
     - name: Build NoSkid project
       id: build
@@ -97,24 +111,19 @@ jobs:
         api-password: ${{ secrets.API_PASSWORD }}
         retry-count: '3'
     
-    - name: Send email notification
-      id: email-notify
+    - name: Create GitHub Release
+      id: create-release
       if: |
+        needs.analyze-changes.outputs.is-release == 'true' &&
         steps.build.outputs.build-success == 'true' && 
         steps.deploy.outputs.deploy-success == 'true' &&
         steps.api-update.outputs.update-success == 'true'
-      uses: ./.github/actions/send-email
+      uses: ./.github/actions/create-release
       with:
-        smtp-server: ${{ secrets.SMTP_SERVER }}
-        smtp-port: ${{ secrets.SMTP_PORT }}
-        smtp-username: ${{ secrets.SMTP_USERNAME }}
-        smtp-password: ${{ secrets.SMTP_PASSWORD }}
-        from-email: ${{ secrets.FROM_EMAIL }}
-        to-email: ${{ secrets.TO_EMAIL }}
-        subject: '🚀 NoSkid Deployment Success - ${{ steps.build.outputs.commit-hash }}'
+        build-dir: ${{ steps.build.outputs.build-dir }}
         commit-hash: ${{ steps.build.outputs.commit-hash }}
         api-only: ${{ needs.analyze-changes.outputs.api-only }}
-        build-dir: ${{ steps.build.outputs.build-dir }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: 🎉 Success notification
       if: |
@@ -130,19 +139,17 @@ jobs:
           echo "::notice title=Full Deploy::🚀 Version ${{ steps.build.outputs.commit-hash }} deployed successfully!"
         fi
         
-        if [ "${{ steps.email-notify.outputs.email-success }}" = "true" ]; then
-          echo "::notice title=Email Sent::📧 Notification email sent successfully!"
-        else
-          echo "::warning title=Email Failed::📧 Failed to send notification email"
+        if [ "${{ needs.analyze-changes.outputs.is-release }}" = "true" ]; then
+          echo "::notice title=Release Created::🎊 GitHub release created successfully!"
         fi
-        
+      
         echo "📊 Deployment Summary:"
         echo "   - Commit: ${{ steps.build.outputs.commit-hash }}"
         echo "   - API Only: ${{ needs.analyze-changes.outputs.api-only }}"
         echo "   - Build Success: ${{ steps.build.outputs.build-success }}"
         echo "   - Deploy Success: ${{ steps.deploy.outputs.deploy-success }}"
         echo "   - API Update: ${{ steps.api-update.outputs.update-success }}"
-        echo "   - Email Sent: ${{ steps.email-notify.outputs.email-success }}"
+        echo "   - Release Created: ${{ needs.analyze-changes.outputs.is-release }}"
     
     - name: 💥 Failure notification
       if: failure()
@@ -157,6 +164,8 @@ jobs:
           echo "::error title=API Update Failed::❌ Failed to update API version"
           echo "API Response: ${{ steps.api-update.outputs.response-body }}"
           echo "HTTP Status: ${{ steps.api-update.outputs.http-status }}"
+        elif [ "${{ steps.create-release.outputs.release-success }}" = "false" ]; then
+          echo "::error title=Release Failed::❌ Failed to create GitHub release"
         else
           echo "::error title=Unknown Error::❌ Unknown deployment error"
         fi
