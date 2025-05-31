@@ -27,10 +27,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: 'npm'
-    
-    - name: Install dependencies
-      shell: bash
-      run: npm ci
+
     
     - name: Get commit hash
       id: commit
