@@ -90,8 +90,7 @@ jobs:
       id: api-update
       if: |
         steps.build.outputs.build-success == 'true' && 
-        steps.deploy.outputs.deploy-success == 'true' && 
-        needs.analyze-changes.outputs.api-only != 'true'
+        steps.deploy.outputs.deploy-success == 'true'
       uses: ./.github/actions/update-api
       with:
         commit-hash: ${{ steps.build.outputs.commit-hash }}
@@ -102,7 +101,7 @@ jobs:
       if: |
         steps.build.outputs.build-success == 'true' && 
         steps.deploy.outputs.deploy-success == 'true' &&
-        (steps.api-update.outputs.update-success == 'true' || needs.analyze-changes.outputs.api-only == 'true')
+        steps.api-update.outputs.update-success == 'true'
       run: |
         echo "::notice title=Deployment Success::🎉 Deployment completed successfully!"
         
@@ -117,9 +116,7 @@ jobs:
         echo "   - API Only: ${{ needs.analyze-changes.outputs.api-only }}"
         echo "   - Build Success: ${{ steps.build.outputs.build-success }}"
         echo "   - Deploy Success: ${{ steps.deploy.outputs.deploy-success }}"
-        if [ "${{ needs.analyze-changes.outputs.api-only }}" != "true" ]; then
-          echo "   - API Update: ${{ steps.api-update.outputs.update-success }}"
-        fi
+        echo "   - API Update: ${{ steps.api-update.outputs.update-success }}"
     
     - name: 💥 Failure notification
       if: failure()
