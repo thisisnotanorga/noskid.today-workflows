@@ -181,12 +181,36 @@ runs:
         COMMITS="${{ steps.commits.outputs.commits }}"
         STATS="${{ steps.stats.outputs.stats }}"
         
-        RELEASE_NOTES="# 🚀 NoSkid Release $VERSION\n\n## 📋 Changelog\n\n\`\`\`\n$CHANGELOG\n\`\`\`\n\n## 🔄 Recent Changes\n\n$COMMITS\n\n$STATS\n\n## 📦 Assets\n\n- **noskid-prod-${VERSION}.zip**: Production build ready for deployment\n- **noskid-source-${VERSION}.zip**: Complete source code (excluding build artifacts)\n\n---\n*This release was automatically created on $(date -u '+%Y-%m-%d at %H:%M:%S UTC')*"
+        # Create release notes with proper formatting
+        cat << 'EOF' > release_notes.md
+# 🚀 NoSkid Release ${{ steps.version.outputs.version }}
 
+## 📋 Changelog
 
+```
+${{ steps.changelog.outputs.changelog }}
+```
+
+## 🔄 Recent Changes
+
+${{ steps.commits.outputs.commits }}
+
+${{ steps.stats.outputs.stats }}
+
+## 📦 Assets
+
+- **noskid-prod-${{ steps.version.outputs.version }}.zip**: Production build ready for deployment
+- **noskid-source-${{ steps.version.outputs.version }}.zip**: Complete source code (excluding build artifacts)
+
+---
+*This release was automatically created on $(date -u '+%Y-%m-%d at %H:%M:%S UTC')*
+EOF
+        
+        # Read the generated file and store in output
+        RELEASE_NOTES_CONTENT=$(cat release_notes.md)
         
         echo "release-notes<<EOF" >> $GITHUB_OUTPUT
-        echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+        echo "$RELEASE_NOTES_CONTENT" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
         
         echo "✅ Release notes generated"
@@ -200,14 +224,13 @@ runs:
         echo "🎊 Creating GitHub release..."
         
         VERSION="${{ steps.version.outputs.version }}"
-        RELEASE_NOTES="${{ steps.release-notes.outputs.release-notes }}"
         PROD_ARCHIVE="${{ steps.prod-archive.outputs.prod-archive }}"
         SOURCE_ARCHIVE="${{ steps.source-archive.outputs.source-archive }}"
         
-        # Create release
+        # Create release using the generated notes file
         RELEASE_RESPONSE=$(gh release create "v$VERSION" \
           --title "🚀 NoSkid $VERSION" \
-          --notes "$RELEASE_NOTES" \
+          --notes-file release_notes.md \
           --draft=false \
           --prerelease=false \
           "$PROD_ARCHIVE" \
