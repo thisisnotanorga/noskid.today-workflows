@@ -59,7 +59,7 @@ jobs:
         echo "   - Has frontend changes: $HAS_FRONTEND"
 
   build-and-deploy:
-    name: 🔨 Build & Deploy
+    name: Build & Deploy
     runs-on: ubuntu-latest
     needs: analyze-changes
     if: needs.analyze-changes.outputs.changed-files != ''
