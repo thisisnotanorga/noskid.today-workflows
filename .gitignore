@@ -24,3 +24,4 @@ api/config.php
 !/package.json
 !/badges.md
 !/.gitignore
+!/.github/
