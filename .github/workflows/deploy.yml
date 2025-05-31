@@ -97,6 +97,25 @@ jobs:
         api-password: ${{ secrets.API_PASSWORD }}
         retry-count: '3'
     
+    - name: Send email notification
+      id: email-notify
+      if: |
+        steps.build.outputs.build-success == 'true' && 
+        steps.deploy.outputs.deploy-success == 'true' &&
+        steps.api-update.outputs.update-success == 'true'
+      uses: ./.github/actions/send-email
+      with:
+        smtp-server: ${{ secrets.SMTP_SERVER }}
+        smtp-port: ${{ secrets.SMTP_PORT }}
+        smtp-username: ${{ secrets.SMTP_USERNAME }}
+        smtp-password: ${{ secrets.SMTP_PASSWORD }}
+        from-email: ${{ secrets.FROM_EMAIL }}
+        to-email: ${{ secrets.TO_EMAIL }}
+        subject: '🚀 NoSkid Deployment Success - ${{ steps.build.outputs.commit-hash }}'
+        commit-hash: ${{ steps.build.outputs.commit-hash }}
+        api-only: ${{ needs.analyze-changes.outputs.api-only }}
+        build-dir: ${{ steps.build.outputs.build-dir }}
+    
     - name: 🎉 Success notification
       if: |
         steps.build.outputs.build-success == 'true' && 
@@ -111,12 +130,19 @@ jobs:
           echo "::notice title=Full Deploy::🚀 Version ${{ steps.build.outputs.commit-hash }} deployed successfully!"
         fi
         
+        if [ "${{ steps.email-notify.outputs.email-success }}" = "true" ]; then
+          echo "::notice title=Email Sent::📧 Notification email sent successfully!"
+        else
+          echo "::warning title=Email Failed::📧 Failed to send notification email"
+        fi
+        
         echo "📊 Deployment Summary:"
         echo "   - Commit: ${{ steps.build.outputs.commit-hash }}"
         echo "   - API Only: ${{ needs.analyze-changes.outputs.api-only }}"
         echo "   - Build Success: ${{ steps.build.outputs.build-success }}"
         echo "   - Deploy Success: ${{ steps.deploy.outputs.deploy-success }}"
         echo "   - API Update: ${{ steps.api-update.outputs.update-success }}"
+        echo "   - Email Sent: ${{ steps.email-notify.outputs.email-success }}"
     
     - name: 💥 Failure notification
       if: failure()
