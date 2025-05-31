@@ -128,35 +128,57 @@ runs:
         
         echo "✅ Email content prepared"
     
-    - name: Read changelog
+    - name: Read changelog and generate final email
       id: changelog
       shell: bash
       run: |
-        echo "📖 Reading changelog..."
+        echo "📖 Reading changelog and generating final email..."
         
-        CHANGELOG_SECTION=""
         if [ -f "changelog.txt" ]; then
             echo "✅ Changelog found, including in email"
             
-            # Read changelog and escape HTML
-            CHANGELOG_CONTENT=$(cat changelog.txt | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g')
-            
-            CHANGELOG_SECTION='<div class="changelog">
+            # Create changelog section with proper escaping
+            cat > changelog_section.html << 'CHANGELOG_EOF'
+            <div class="changelog">
                 <h2>📝 Changelog</h2>
-                <pre>'"$CHANGELOG_CONTENT"'</pre>
-            </div>'
+                <pre>
+        CHANGELOG_EOF
+            
+            # Append escaped changelog content
+            cat changelog.txt | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g' >> changelog_section.html
+            
+            # Close the pre and div tags
+            cat >> changelog_section.html << 'CHANGELOG_EOF'
+                </pre>
+            </div>
+        CHANGELOG_EOF
         else
-            echo "⚠️ No changelog.txt found, skipping changelog section"
-            CHANGELOG_SECTION='<div class="changelog">
+            echo "⚠️ No changelog.txt found, using default changelog section"
+            cat > changelog_section.html << 'CHANGELOG_EOF'
+            <div class="changelog">
                 <h2>📝 Changelog</h2>
                 <p><em>No changelog available for this deployment.</em></p>
-            </div>'
+            </div>
+        CHANGELOG_EOF
         fi
         
-        # Replace changelog placeholder
-        sed -i "s|CHANGELOG_SECTION_PLACEHOLDER|$CHANGELOG_SECTION|g" email_content.html
+        # Create the final email by combining template and changelog
+        # Use awk to replace the placeholder with the changelog content
+        awk '
+        /CHANGELOG_SECTION_PLACEHOLDER/ {
+            while ((getline line < "changelog_section.html") > 0) {
+                print line
+            }
+            close("changelog_section.html")
+            next
+        }
+        { print }
+        ' email_content.html > final_email.html
         
-        echo "✅ Changelog processed"
+        # Clean up temporary files
+        rm -f changelog_section.html
+        
+        echo "✅ Final email generated"
     
     - name: Send email
       id: send-email
@@ -194,7 +216,7 @@ runs:
         EOF
         
         # Append HTML content
-        cat email_content.html >> email_message.txt
+        cat final_email.html >> email_message.txt
         
         # Send email
         if ssmtp ${{ inputs.to-email }} < email_message.txt; then
@@ -207,6 +229,6 @@ runs:
         fi
         
         # Cleanup
-        rm -f email_content.html email_message.txt
+        rm -f email_content.html final_email.html email_message.txt
         
         echo "📧 Email notification completed"
