@@ -3,7 +3,7 @@ name: Deploy NoSkid Production build
 on:
   push:
     paths:
-      - 'website/aa'
+      - 'website/**'
 
 env:
   NODE_VERSION: '18'
@@ -11,7 +11,7 @@ env:
 jobs:
   analyze-changes:
     name: Analyze Changes
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       api-only: ${{ steps.check.outputs.api-only }}
       has-frontend: ${{ steps.check.outputs.has-frontend }}
@@ -55,7 +55,7 @@ jobs:
 
   build-and-deploy:
     name: Build & Deploy
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: analyze-changes
     if: needs.analyze-changes.outputs.changed-files != ''
     
