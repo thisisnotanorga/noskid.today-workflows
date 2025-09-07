@@ -74,7 +74,7 @@ jobs:
           ## 🚀 Release ${COMMIT_HASH}
           
           **Built from commit:** \`${COMMIT_HASH}\`  
-          **Author:** ${COMMIT_AUTHOR}  
+          **Author:** @${COMMIT_AUTHOR}  
           **Date:** ${COMMIT_DATE}
           
           ### 📝 Commit Message
