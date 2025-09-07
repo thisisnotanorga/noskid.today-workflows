@@ -101,26 +101,15 @@ jobs:
           echo "release-name=NoSkid Release ${COMMIT_HASH}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        id: create-release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release-info.outputs.release-tag }}
-          release_name: ${{ steps.release-info.outputs.release-name }}
+          name: ${{ steps.release-info.outputs.release-name }}
           body_path: release_body.md
+          files: ${{ steps.archive.outputs.archive-path }}
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.archive.outputs.archive-path }}
-          asset_name: ${{ steps.archive.outputs.archive-name }}
-          asset_content_type: application/zip
+          generate_release_notes: false
 
       - name: Release Summary
         run: |
@@ -131,4 +120,4 @@ jobs:
           echo "**Archive:** \`${{ steps.archive.outputs.archive-name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Build Directory:** \`${{ steps.build.outputs.build-dir }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View Release](${{ steps.create-release.outputs.html_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "**View Release:** https://github.com/${{ github.repository }}/releases/tag/${{ steps.release-info.outputs.release-tag }}" >> $GITHUB_STEP_SUMMARY
