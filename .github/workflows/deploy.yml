@@ -3,7 +3,7 @@ name: Deploy NoSkid Production build
 on:
   push:
     paths:
-      - 'website/**'
+      - 'website/aa'
 
 env:
   NODE_VERSION: '18'
